@@ -20,7 +20,7 @@ function App() {
           <a href="#community">Community</a>
           <a href="#support">Support</a>
         </nav>
-        <a className="btn btn-primary" href="https://github.com/omdev009mishra/GeoFitWARS" target="_blank" rel="noopener noreferrer">
+        <a className="btn btn-primary" href="https://github.com/omdev009mishra/GeoFit-Wars-Game" target="_blank" rel="noopener noreferrer">
           Play Now
         </a>
       </header>
@@ -46,10 +46,10 @@ function App() {
                 capture zones, build your fortress, and dominate rivals on a strategic map.
               </p>
               <div className="hero-actions">
-                <a className="btn btn-primary" href="https://github.com/omdev009mishra/GeoFitWARS" target="_blank" rel="noopener noreferrer">
+                <a className="btn btn-primary" href="https://github.com/omdev009mishra/GeoFit-Wars-Game" target="_blank" rel="noopener noreferrer">
                   Play Beta
                 </a>
-                <a className="btn btn-ghost" href="https://github.com/omdev009mishra/GeoFitWARS" target="_blank" rel="noopener noreferrer">
+                <a className="btn btn-ghost" href="https://github.com/omdev009mishra/GeoFit-Wars-Game" target="_blank" rel="noopener noreferrer">
                   Download App
                 </a>
               </div>
@@ -357,7 +357,7 @@ function App() {
             </p>
             <a
               className="btn btn-primary"
-              href="https://github.com/omdev009mishra/GeoFitWARS"
+              href="https://github.com/omdev009mishra/GeoFit-Wars-Game"
               target="_blank"
               rel="noopener noreferrer"
               style={{marginTop: '1.5rem', fontSize: '1.1rem', padding: '1rem 2.2rem'}}
