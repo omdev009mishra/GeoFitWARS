@@ -1,4 +1,4 @@
-import { useRef } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import logoImage from './assets/game logo.png'
 import fortressImage from './assets/14-Fortress.webp'
 import heroImage from './assets/hero.jpg'
@@ -6,12 +6,223 @@ import runningImage from './assets/Screenshot_2026-03-12-03-14-17-264_com.geofit
 import worldMapImage from './assets/pngtree-3d-world-map-with-topography-png-image_19170362.png'
 import DotGrid from './DotGrid'
 import Crosshair from './Crosshair'
+import Dither from './Dither'
+
+type CommandMode = 'Scout' | 'Raid' | 'Defend'
+
+const statTargets = [
+  { value: 128947, label: 'KM Logged', suffix: '+' },
+  { value: 2763, label: 'Active Clans', suffix: '' },
+  { value: 914, label: 'Daily Battles', suffix: '' },
+]
+
+const commandProfiles: Record<CommandMode, { feed: string; risk: number; reward: number; shield: number }> = {
+  Scout: {
+    feed: 'Recon drones spotted open sectors in South Asia.',
+    risk: 28,
+    reward: 54,
+    shield: 66,
+  },
+  Raid: {
+    feed: 'Clan raids are peaking. Strike windows open for 19 minutes.',
+    risk: 72,
+    reward: 89,
+    shield: 42,
+  },
+  Defend: {
+    feed: 'Enemy siege traffic increased. Fortress shield boost is recommended.',
+    risk: 46,
+    reward: 61,
+    shield: 91,
+  },
+}
+
+const missionCards = [
+  {
+    title: 'Urban Blitz',
+    detail: 'Complete a 5 km run to trigger double energy conversion for one hour.',
+    type: 'Sprint Event',
+  },
+  {
+    title: 'Border Lock',
+    detail: 'Hold three adjacent territories to activate a passive coin multiplier.',
+    type: 'Defense Event',
+  },
+  {
+    title: 'Clan Uplink',
+    detail: 'Coordinate with 2+ teammates to launch a synchronized raid bonus.',
+    type: 'Co-op Event',
+  },
+]
+
+const loadingStages = [
+  'Syncing terrain sectors...',
+  'Calibrating run telemetry...',
+  'Warming up battle servers...',
+  'Preparing command interface...',
+]
 
 function App() {
   const containerRef = useRef<HTMLDivElement | null>(null)
+  const statsRef = useRef<HTMLDivElement | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
+  const [loadingProgress, setLoadingProgress] = useState(0)
+  const [activeMode, setActiveMode] = useState<CommandMode>('Scout')
+  const [stats, setStats] = useState(() => statTargets.map(() => 0))
+
+  useEffect(() => {
+    const loadingDuration = 1700
+    let rafId = 0
+    document.body.classList.add('loading-lock')
+
+    const startedAt = performance.now()
+    const animateLoading = (time: number) => {
+      const elapsed = Math.min(1, (time - startedAt) / loadingDuration)
+      const eased = 1 - Math.pow(1 - elapsed, 3)
+      setLoadingProgress(Math.round(eased * 100))
+
+      if (elapsed < 1) {
+        rafId = requestAnimationFrame(animateLoading)
+      }
+    }
+
+    rafId = requestAnimationFrame(animateLoading)
+
+    const timerId = window.setTimeout(() => {
+      setLoadingProgress(100)
+      setIsLoading(false)
+      document.body.classList.remove('loading-lock')
+    }, loadingDuration)
+
+    return () => {
+      if (rafId) cancelAnimationFrame(rafId)
+      window.clearTimeout(timerId)
+      document.body.classList.remove('loading-lock')
+    }
+  }, [])
+
+  const loadingStage = useMemo(() => {
+    const stageIndex = Math.min(
+      loadingStages.length - 1,
+      Math.floor((loadingProgress / 100) * loadingStages.length),
+    )
+    return loadingStages[stageIndex]
+  }, [loadingProgress])
+
+  useEffect(() => {
+    const revealTargets = Array.from(document.querySelectorAll<HTMLElement>('.reveal'))
+    const revealObserver = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            entry.target.classList.add('is-visible')
+            revealObserver.unobserve(entry.target)
+          }
+        })
+      },
+      { threshold: 0.18, rootMargin: '0px 0px -70px 0px' },
+    )
+
+    revealTargets.forEach((target) => revealObserver.observe(target))
+    return () => revealObserver.disconnect()
+  }, [])
+
+  useEffect(() => {
+    const target = statsRef.current
+    if (!target) return
+
+    let frameId = 0
+    let started = false
+    const duration = 1300
+
+    const animate = (startTime: number) => {
+      const run = (time: number) => {
+        const elapsed = Math.min(1, (time - startTime) / duration)
+        const eased = 1 - Math.pow(1 - elapsed, 3)
+
+        setStats(statTargets.map((item) => Math.floor(item.value * eased)))
+
+        if (elapsed < 1) {
+          frameId = requestAnimationFrame(run)
+        }
+      }
+
+      frameId = requestAnimationFrame(run)
+    }
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting && !started) {
+          started = true
+          animate(performance.now())
+          observer.disconnect()
+        }
+      },
+      { threshold: 0.35 },
+    )
+
+    observer.observe(target)
+
+    return () => {
+      observer.disconnect()
+      if (frameId) cancelAnimationFrame(frameId)
+    }
+  }, [])
+
+  const profile = commandProfiles[activeMode]
+  const renderedStats = useMemo(
+    () =>
+      stats.map((value, index) => {
+        const target = statTargets[index]
+        return `${value.toLocaleString()}${target.suffix}`
+      }),
+    [stats],
+  )
 
   return (
     <div className="app-root">
+      {isLoading ? (
+        <div className="loading-screen" role="status" aria-live="polite" aria-label="Loading GeoFitWars">
+          <div className="loading-dither" aria-hidden="true">
+            <Dither
+              waveColor={[0.5, 0.5, 0.5]}
+              disableAnimation={false}
+              enableMouseInteraction
+              mouseRadius={0.3}
+              colorNum={4}
+              waveAmplitude={0.3}
+              waveFrequency={3}
+              waveSpeed={0.05}
+            />
+          </div>
+          <div className="loading-inner">
+            <p className="loading-badge">Live Boot Sequence</p>
+            <img src={logoImage} alt="" className="loading-logo" />
+            <p className="loading-title">GeoFitWars</p>
+            <p className="loading-subtitle">{loadingStage}</p>
+            <div className="loading-percent-wrap" aria-hidden="true">
+              <div
+                className="loading-percent-ring"
+                style={{
+                  background: `conic-gradient(var(--brand-cool) ${loadingProgress * 3.6}deg, rgba(255, 255, 255, 0.12) 0deg)`,
+                }}
+              >
+                <span>{loadingProgress}%</span>
+              </div>
+              <div className="loading-pulse" />
+            </div>
+            <div className="loading-bar" aria-hidden="true">
+              <span style={{ width: `${loadingProgress}%` }} />
+            </div>
+            <div className="loading-meta" aria-hidden="true">
+              <span>Ping: 24ms</span>
+              <span>Nodes: 512</span>
+              <span>Status: Online</span>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       <div className="app-bg-layer" aria-hidden="true">
         <DotGrid
           dotSize={5}
@@ -27,69 +238,113 @@ function App() {
       </div>
 
       <div className="app-content-layer" ref={containerRef}>
-        <Crosshair containerRef={containerRef} color="#ffffff" targeted />
-      <header className="topbar">
-        <a className="brand" href="#home">
-          <img src={logoImage} alt="GeoFitWars logo" className="brand-logo" />
-          <span>GeoFitWars</span>
-        </a>
-        <nav className="nav-links" aria-label="Main navigation">
-          <a href="#overview">Overview</a>
-          <a href="#features">Features</a>
-          <a href="#media">Media</a>
-          <a href="#news">News</a>
-          <a href="#community">Community</a>
-          <a href="#support">Support</a>
-        </nav>
-        <a className="btn btn-primary" href="https://github.com/omdev009mishra/GeoFit-Wars-Game" target="_blank" rel="noopener noreferrer">
-          Play Now
-        </a>
-      </header>
+        {!isLoading ? <Crosshair containerRef={containerRef} color="#ffffff" targeted /> : null}
+        <header className="topbar">
+          <a className="brand" href="#home">
+            <img src={logoImage} alt="GeoFitWars logo" className="brand-logo" />
+            <span>GeoFitWars</span>
+          </a>
+          <nav className="nav-links" aria-label="Main navigation">
+            <a href="#overview">Overview</a>
+            <a href="#features">Features</a>
+            <a href="#missions">Missions</a>
+            <a href="#media">Media</a>
+            <a href="#news">News</a>
+            <a href="#community">Community</a>
+            <a href="#support">Support</a>
+          </nav>
+          <a className="btn btn-primary" href="https://github.com/omdev009mishra/GeoFit-Wars-Game" target="_blank" rel="noopener noreferrer">
+            Play Now
+          </a>
+        </header>
 
-      <main className="site" id="home">
-        <section className="hero section">
-          <div className="hero-bg" aria-hidden="true">
-            <img src={heroImage} alt="" className="hero-image" />
-            <span className="hero-overlay" />
-            <span className="orb orb-one" />
-            <span className="orb orb-two" />
-            <span className="ring ring-one" />
-            <span className="ring ring-two" />
-            <span className="iso-card iso-a" />
-            <span className="iso-card iso-b" />
-          </div>
-          <div className="container hero-grid">
-            <div>
-              <p className="eyebrow">GeoFitWars | Fitness Strategy Game</p>
-              <h1>Turn Your Runs Into Conquests</h1>
-              <p className="lead">
-                GeoFitWars transforms real-world running into territory wars. Run to generate power,
-                capture zones, build your fortress, and dominate rivals on a strategic map.
-              </p>
-              <div className="hero-actions">
-                <a className="btn btn-primary" href="https://github.com/omdev009mishra/GeoFit-Wars-Game" target="_blank" rel="noopener noreferrer">
-                  Play Beta
-                </a>
-                <a className="btn btn-ghost" href="https://github.com/omdev009mishra/GeoFit-Wars-Game" target="_blank" rel="noopener noreferrer">
-                  Download App
-                </a>
-              </div>
+        <main className="site" id="home">
+          <section className="hero section">
+            <div className="hero-bg" aria-hidden="true">
+              <img src={heroImage} alt="" className="hero-image" />
+              <span className="hero-overlay" />
+              <span className="orb orb-one" />
+              <span className="orb orb-two" />
+              <span className="ring ring-one" />
+              <span className="ring ring-two" />
+              <span className="iso-card iso-a" />
+              <span className="iso-card iso-b" />
             </div>
-            <aside className="hero-panel">
-              <h3>Core Loop</h3>
-              <ol>
-                <li>Run in real life</li>
-                <li>Convert distance into resources</li>
-                <li>Capture territories</li>
-                <li>Build and upgrade your base</li>
-                <li>Attack enemies and defend your empire</li>
-              </ol>
-            </aside>
-          </div>
-        </section>
+            <div className="container hero-grid reveal is-visible">
+              <div>
+                <p className="eyebrow">GeoFitWars | Fitness Strategy Game</p>
+                <h1>Turn Your Runs Into Conquests</h1>
+                <p className="lead">
+                  GeoFitWars transforms real-world running into territory wars. Run to generate power,
+                  capture zones, build your fortress, and dominate rivals on a strategic map.
+                </p>
+                <div className="hero-actions">
+                  <a className="btn btn-primary" href="https://github.com/omdev009mishra/GeoFit-Wars-Game" target="_blank" rel="noopener noreferrer">
+                    Play Beta
+                  </a>
+                  <a className="btn btn-ghost" href="https://github.com/omdev009mishra/GeoFit-Wars-Game" target="_blank" rel="noopener noreferrer">
+                    Download App
+                  </a>
+                </div>
+                <div className="live-feed" role="status" aria-live="polite">
+                  <span className="pulse-dot" aria-hidden="true" />
+                  <span>{profile.feed}</span>
+                </div>
+                <div className="hero-stats" ref={statsRef}>
+                  {statTargets.map((item, index) => (
+                    <article key={item.label} className="hero-stat-card">
+                      <strong>{renderedStats[index]}</strong>
+                      <span>{item.label}</span>
+                    </article>
+                  ))}
+                </div>
+              </div>
+              <aside className="hero-panel command-panel">
+                <h3>Command Console</h3>
+                <div className="mode-switch" role="tablist" aria-label="Command mode switcher">
+                  {(Object.keys(commandProfiles) as CommandMode[]).map((mode) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      className={`mode-pill ${mode === activeMode ? 'active' : ''}`}
+                      onClick={() => setActiveMode(mode)}
+                      role="tab"
+                      aria-selected={mode === activeMode}
+                    >
+                      {mode}
+                    </button>
+                  ))}
+                </div>
+                <div className="meter-stack">
+                  <div className="meter-row">
+                    <span>Risk</span>
+                    <div className="meter-track"><i style={{ width: `${profile.risk}%` }} /></div>
+                    <b>{profile.risk}%</b>
+                  </div>
+                  <div className="meter-row">
+                    <span>Reward</span>
+                    <div className="meter-track reward"><i style={{ width: `${profile.reward}%` }} /></div>
+                    <b>{profile.reward}%</b>
+                  </div>
+                  <div className="meter-row">
+                    <span>Shield</span>
+                    <div className="meter-track shield"><i style={{ width: `${profile.shield}%` }} /></div>
+                    <b>{profile.shield}%</b>
+                  </div>
+                </div>
+                <ol>
+                  <li>Run in real life</li>
+                  <li>Convert distance into resources</li>
+                  <li>Capture territories</li>
+                  <li>Build and upgrade your base</li>
+                  <li>Attack enemies and defend your empire</li>
+                </ol>
+              </aside>
+            </div>
+          </section>
 
-        <section className="section" id="overview">
-          <div className="container split overview-layout">
+          <section className="section" id="overview">
+            <div className="container split overview-layout reveal">
             <div>
               <p className="eyebrow">Game Overview</p>
               <h2>One world. Your world.</h2>
@@ -128,11 +383,11 @@ function App() {
                 <span>Raid rivals, defend your base, and climb leaderboards.</span>
               </article>
             </div>
-          </div>
-        </section>
+            </div>
+          </section>
 
-        <section className="section section-dark" id="how-it-works">
-          <div className="container">
+          <section className="section section-dark" id="how-it-works">
+            <div className="container reveal">
             <p className="eyebrow">How It Works</p>
             <h2 className="grad-heading">Four steps to domination</h2>
             <div className="steps-row">
@@ -177,11 +432,31 @@ function App() {
                 <p>Raid rivals, defend your fortress, and climb the global leaderboard.</p>
               </div>
             </div>
-          </div>
-        </section>
+            </div>
+          </section>
 
-        <section className="section section-dark" id="features">
-          <div className="container">
+          <section className="section tactical-lab" id="missions">
+            <div className="container reveal">
+              <p className="eyebrow">Live Missions</p>
+              <h2>Choose your battlefield objective</h2>
+              <div className="mission-grid">
+                {missionCards.map((mission, index) => (
+                  <article
+                    key={mission.title}
+                    className={`mission-card ${index === 1 ? 'featured' : ''}`}
+                  >
+                    <p className="mission-type">{mission.type}</p>
+                    <h3>{mission.title}</h3>
+                    <p>{mission.detail}</p>
+                    <a href="#community" className="mission-link">Deploy Team</a>
+                  </article>
+                ))}
+              </div>
+            </div>
+          </section>
+
+          <section className="section section-dark" id="features">
+            <div className="container reveal">
             <p className="eyebrow">Core Features</p>
             <h2>Built for movement, strategy, and rivalry</h2>
             <div className="feature-grid">
@@ -222,11 +497,11 @@ function App() {
                 <p>More movement means faster progression, stronger defenses, and better rewards.</p>
               </article>
             </div>
-          </div>
-        </section>
+            </div>
+          </section>
 
-        <section className="section" id="media">
-          <div className="container">
+          <section className="section" id="media">
+            <div className="container reveal">
             <p className="eyebrow">Media</p>
             <h2>In-game screens and gameplay previews</h2>
             <div className="media-grid">
@@ -247,11 +522,11 @@ function App() {
                 <span>Commander Profile</span>
               </article>
             </div>
-          </div>
-        </section>
+            </div>
+          </section>
 
-        <section className="section section-dark" id="news">
-          <div className="container">
+          <section className="section section-dark" id="news">
+            <div className="container reveal">
             <p className="eyebrow">Latest News</p>
             <h2>Updates from the battlefield</h2>
             <div className="news-grid">
@@ -271,11 +546,11 @@ function App() {
                 <p>Limited-time control zones now provide high-value bonus resources.</p>
               </article>
             </div>
-          </div>
-        </section>
+            </div>
+          </section>
 
-        <section className="section" id="community">
-          <div className="container split">
+          <section className="section" id="community">
+            <div className="container split reveal">
             <div>
               <p className="eyebrow">Community</p>
               <h2>Play together. Conquer together.</h2>
@@ -329,11 +604,11 @@ function App() {
                 <span>YouTube</span>
               </div>
             </div>
-          </div>
-        </section>
+            </div>
+          </section>
 
-        <section className="section" id="support">
-          <div className="container">
+          <section className="section" id="support">
+            <div className="container reveal">
             <p className="eyebrow">Support</p>
             <h2>Help center and player support</h2>
             <div className="support-grid">
@@ -365,11 +640,11 @@ function App() {
                 <p>Send bug reports, match issues, and payment problems to support.</p>
               </article>
             </div>
-          </div>
-        </section>
+            </div>
+          </section>
 
-        <section className="section join-cta">
-          <div className="container join-cta-inner">
+          <section className="section join-cta">
+            <div className="container join-cta-inner reveal">
             <div className="join-cta-glow" aria-hidden="true" />
             <p className="eyebrow">Ready to fight?</p>
             <h2 className="grad-heading">Your empire awaits</h2>
@@ -385,17 +660,17 @@ function App() {
             >
               Play Free Now →
             </a>
+            </div>
+          </section>
+
+        </main>
+
+        <footer className="footer">
+          <div className="container footer-row">
+            <p>GeoFitWars 2026. All rights reserved.</p>
+            <p>Privacy | Terms | Player Support</p>
           </div>
-        </section>
-
-      </main>
-
-      <footer className="footer">
-        <div className="container footer-row">
-          <p>GeoFitWars 2026. All rights reserved.</p>
-          <p>Privacy | Terms | Player Support</p>
-        </div>
-      </footer>
+        </footer>
       </div>
     </div>
   )
