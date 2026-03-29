@@ -1,12 +1,33 @@
+import { useRef } from 'react'
 import logoImage from './assets/game logo.png'
 import fortressImage from './assets/14-Fortress.webp'
 import heroImage from './assets/hero.jpg'
 import runningImage from './assets/Screenshot_2026-03-12-03-14-17-264_com.geofitwars.jpg'
 import worldMapImage from './assets/pngtree-3d-world-map-with-topography-png-image_19170362.png'
+import DotGrid from './DotGrid'
+import Crosshair from './Crosshair'
 
 function App() {
+  const containerRef = useRef<HTMLDivElement | null>(null)
+
   return (
-    <>
+    <div className="app-root">
+      <div className="app-bg-layer" aria-hidden="true">
+        <DotGrid
+          dotSize={5}
+          gap={15}
+          baseColor="#271E37"
+          activeColor="#5227FF"
+          proximity={120}
+          shockRadius={250}
+          shockStrength={5}
+          resistance={750}
+          returnDuration={1.5}
+        />
+      </div>
+
+      <div className="app-content-layer" ref={containerRef}>
+        <Crosshair containerRef={containerRef} color="#ffffff" targeted />
       <header className="topbar">
         <a className="brand" href="#home">
           <img src={logoImage} alt="GeoFitWars logo" className="brand-logo" />
@@ -375,7 +396,8 @@ function App() {
           <p>Privacy | Terms | Player Support</p>
         </div>
       </footer>
-    </>
+      </div>
+    </div>
   )
 }
 

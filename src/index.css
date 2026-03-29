@@ -32,6 +32,24 @@ html {
   scroll-behavior: smooth;
 }
 
+.app-root {
+  position: relative;
+  isolation: isolate;
+}
+
+.app-bg-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  opacity: 0.42;
+  pointer-events: none;
+}
+
+.app-content-layer {
+  position: relative;
+  z-index: 1;
+}
+
 body {
   min-width: 320px;
   background: radial-gradient(circle at 20% 5%, #172131, #070b12 60%);
